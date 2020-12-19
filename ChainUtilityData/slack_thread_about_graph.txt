@@ -1,0 +1,23 @@
+Ok I have spent a decent amount of time figuring out the history of the graph and the geodataframe and why everything is the way it is. The graphs that we should use are included below and on GitHub (the recom 10 steps are in AlternativePlans/graph_recom_{i}_dec.json, for i = 100000, 200000, etc., the current plan is in ChainUtilityData/graph_dec.json).
+
+The changes that I made are documented in AddingEdges.ipynb on the GitHub. In short, Annika added the edges [(69, 216), (72, 216), (772, 1492)], and then I added the edges [(130, 521), (130, 522), (100, 522), (100, 527), (100, 532), (100, 539), (211, 212)]. This was sufficient to make all of the recom steps and the original graph for US_Distric, UT_HOUSE, and UT_SEN satisfy the single_flip_contiguous constraint
+
+Below I want to write a little thread to explain the history of the graph data as far as I understand it.
+
+Originally, we had constructed the graph with all of the ~2900  original precincts. Then, as documented in an earlier version of Algorithmic-Merging-v4.ipynb, I merged precincts which had geometrical issues (like they contained another precinct, had small islands, or multiple disconnected components). This took the graph down to 2640 precincts, and that graph was eventually saved as graph_combined_vs_2018.json.
+
+Later in the summer we wanted to run chains on the UT_SEN and UT_HOUSE districts, but I found that the merging algorithm I used had not accounted for the UT_SEN and UT_HOUSE districts and had accidentally merged 4 precincts which were in differing UT_SEN and UT_HOUSE districts. The partitions for UT_HOUSE and UT_SEN also did not satisfy the single_flip_contiguous constraint. So in the current version of Algorithmic-Merging-v4.ipynb, we redid the merging with the UT_HOUSE and UT_SEN districts in mind, and new total came to 2643 precincts. This was (the original version of) graph_august.json. The only change between this graph and the previous version was that it left (what are now) precincts 230, 259, 265, 267 unmerged.
+
+But we realized that this new graph didn't satisfy the single_flip_contiguous constraint for UT_HOUSE and UT_SEN, so I went on a hunt to find which edges we needed to make the UT_HOUSE and UT_SEN partitions contiguous (this is in FixingUTHouseSen.ipynb). It turned out that I needed to add edges [(216, 69), (216, 72)] to make Senate 17 contiguous, [(130, 521), (130, 522), (100, 522), (100, 527), (100, 532), (100, 539)] to make House 55 contiguous, and (211, 212) to make House 1 contiguous. I added these edges and resaved them in graph_august.json (the current version).
+
+When Annika input the new vote share data to correct the errors and everything she used the geometries in gdf_august.shp (or some identical file) to prorate the votes and population. This file was associated with graph_august.json, and it also had 2643 precincts.
+
+But the 10 recom starting points were created before August, when we hadn't fixed the UT_HOUSE and UT_SEN districts, so these graphs had 2640 precincts like graph_combined_vs_2018.json. I used the fact that we unmerged 230, 259, 265, and 267 to map the recom assignments to the 2643-precinct graph we were now using (as documented in UpdatingAssignments.ipynb) but I failed to remember that I had also added edges to graph_august.json that gerrychain didn't find when creating the adjacency graph.
+
+So today I added those edges back in to make graph_dec.json and graph_recom_{i}.json satisfy the single-flip contiguous constraint and line up with the topology of graph_august.json (except that several edges were removed by gerrychain when Annika generated the graph again, these were edges that were connected to small islands that were deleted when I did the geometric cleaning). So as far as I can tell, graph_dec.json and its associated recom steps have the appropriate topology.
+
+I tested all of the graphs and they all satisfy the single_flip_contiguous constraint, and I have run test chains on each of them and they all worked. So I hope that means that we can really run chains on these new graphs, and that this really is the final version.
+
+
+
+
