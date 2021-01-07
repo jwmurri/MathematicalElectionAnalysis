@@ -6,7 +6,7 @@ import numpy as np
 from scipy import optimize as opt
 import networkx as nx
 import matplotlib.pyplot as plt
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Polygon
 
 def plot_district_map(assignment, size=(3,2), dpi=300, cmap='viridis', precincts='UtahData/gdf_august.shp', save=False, savetitle=None):
     """
@@ -90,15 +90,16 @@ def plot_graph(precincts, graph, window=None, node_size=0.1, line_size=0.05, dpi
 def calc_percentile(val, data):
     return opt.bisect(lambda x: np.percentile(data, x) - val, 0, 100)
 
-def make_box_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False, current_plan_name='2012 plan'):
+def make_box_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False, current_plan_name='Enacted plan'):
     """
     Makes a box plot of the given data, with the specified parameters.
-    Only pass in the columns of the dataframe which contain the vote shares.
+
+    Parameters:
+        data (DataFrame) dataframe with columns corresponding to the vote shares.
     """
+    # set parameters
     n = len(data)
     m = len(data.iloc[0])
-
-    # Parameter to help make the fig look good
     k = max(1, m//14)
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
@@ -123,43 +124,401 @@ def make_box_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
     plt.clf()
 
-def make_violin_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False, current_plan_name='2012 plan'):
+def get_areas(shapes, norm='L1', vert=True):
+
+    areas = []
+    for i in range(4):
+        if vert:
+            v = shapes[i].__dict__['_paths'][0].vertices-np.array([0,i+1])
+            if norm=='L2':
+                v[:, 1] = v[:, 1]*np.abs(v[:, 1])
+                area = np.sqrt(Polygon(v).area)
+            else:
+                area = Polygon(v).area
+        else:
+            v = shapes[i].__dict__['_paths'][0].vertices-np.array([i+1, 0])
+            if norm=='L2':
+                v[:, 0] = v[:, 0]*np.abs(v[:, 0])
+                area = np.sqrt(Polygon(v).area)
+            else:
+                area = Polygon(v).area
+
+        areas.append(area)
+
+    return np.array(areas)
+
+def expand_segments(segments, expansion, vert=True):
+
+    paths = segments.get_paths()
+    new_paths = []
+    for i, path in enumerate(paths):
+        if vert:
+            offset = np.array([i+1, 0])
+            new_path = (path.vertices-offset)*np.array([expansion[i],1])+offset
+            new_paths.append(new_path)
+        else:
+            offset = np.array([0, i+1])
+            new_path = (path.vertices-offset)*np.array([1, expansion[i]])+offset
+            new_paths.append(new_path)
+
+    segments.set_paths(new_paths)
+
+def expand_polygons(shapes, expansion, offsets=None, vert=True):
+
+    new_paths = []
+    for i, p in enumerate(shapes):
+        path = p.get_paths()[0]
+        if vert:
+            offset = np.array([i+1, 0])
+            if offsets is not None: offset = np.array([offsets[i], 0])
+            new_path = (path.vertices-offset)*np.array([expansion[i],1])+offset
+        else:
+            offset = np.array([0, i+1])
+            if offsets is not None: offset = np.array([0, offsets[i]])
+            new_path = (path.vertices-offset)*np.array([1, expansion[i]])+offset
+
+        p.set_paths([new_path])
+
+def make_violin_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, positions=None, save=False, area_normalizer='Linf', xticks=None, current_plan_name='Enacted plan', vert=True, bw_method=0.1, alpha=0.8, dist_height=1, widths=0.2, points=200, **kwargs):
     """
     Make a violin plot of the given data, with the specified parameters.
     Only pass in the columns of the dataframe which contain the vote shares.
     """
-    n = len(data)
-    m = len(data.iloc[0])
-
-    # Parameter to help make the fig look good
-    k = max(1, m//14)
-
     d = data.T
+    m = len(d)
+
+    # Construct initial plots
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    result = ax.violinplot(d, bw_method=bw_method, widths=widths, points=points, vert=vert, **kwargs)
+
+    if area_normalizer != 'Linf':
+        areas = get_areas(result['bodies'], norm=area_normalizer, vert=vert)
+        expand_polygons(result['bodies'], expansion=dist_height*np.min(areas)/(areas*widths), vert=vert)
+    else:
+        expand_polygons(result['bodies'], expansion=dist_height*np.ones(m)/widths, vert=vert)
+
+    for pc in result['bodies']:
+        pc.set_alpha(alpha)
+
+    if vert:
+        ax.axhline(0.5, color="#cccccc")
+        ax.hlines(y=d.iloc[:, 0], xmin = np.arange(m)+1-0.2, xmax=np.arange(m)+1+0.2, color='r', lw=2, label=current_plan_name)
+        for i in range(m):
+            plt.text(i+1+0.2, d.iloc[i, 0], str(int(np.round(calc_percentile(d.iloc[i, 0], d.iloc[i]),0)))+'%', horizontalalignment='left', verticalalignment='center')
+
+        ax.set_ylim(0.4, 0.9)
+        # ax.set_yticks([0, 0.25, 0.5, 0.75, 1])
+        if xticks is None:
+            ax.set_xticks([i for i in range(1, m+1)])
+            ax.set_xlim(0.5, m+0.5)
+        else:
+            ax.set_xticks(xticks)
+
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+    else:
+        ax.axvline(0.5, color="#cccccc")
+        ax.vlines(x=d.iloc[:, 0], ymin = np.arange(m)+1-0.2, ymax=np.arange(m)+1+0.2, color='r', lw=2, label=current_plan_name)
+        for i in range(m):
+            plt.text(d.iloc[i, 0]+0.007, i+1+0.2, str(int(np.round(calc_percentile(d.iloc[i, 0], d.iloc[i]),0)))+'%', horizontalalignment='center', verticalalignment='bottom')
+
+        ax.set_xlim(0.4, 0.9)
+        #ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
+        if xticks is None:
+            ax.set_yticks([i for i in range(1, m+1)])
+            ax.set_ylim(0.5, m+0.5)
+        else:
+            ax.set_yticks(xticks)
+
+        ax.set_ylabel(xlabel)
+        ax.set_xlabel(ylabel)
+
+
+    ax.set_title(title)
+    ax.legend(loc='lower right')
+
+    if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
+    plt.show()
+    plt.clf()
+
+def make_histogram(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, bins=50, savetitle=None, save=False):
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-    ax.axhline(0.5, color="#cccccc")
-    try:
-        ax.violinplot(d)
-    except FloatingPointError:
-        ax.violinplot(d, bw_method=0.4)
 
-    ax.hlines(y=d.iloc[:, 0], xmin = np.arange(m)+1-0.2, xmax=np.arange(m)+1+0.2, color='r', lw=2, label=current_plan_name)
-    ax.legend(loc='lower right')
-    for i in range(m):
-        plt.text(i+1, d.iloc[i, 0]-0.04, str(np.round(calc_percentile(d.iloc[i, 0], d.iloc[i]),1))+'%', horizontalalignment='center')
+    data.hist(bins=bins)
+    ax.axvline(x=data.iloc[0], color='r', lw=2, label='Enacted plan, '+str(np.round(calc_percentile(data[0], data),1))+'%')
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.legend(loc='upper right')
+
+    plt.show()
+    if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
+    plt.clf()
+
+def make_bar_chart(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False):
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+
+    unique_vals = np.unique(data)
+    ax.bar(unique_vals, [np.count_nonzero(unique_vals[i] == data) for i in range(len(unique_vals))], width=np.min(unique_vals[1:]-unique_vals[:-1])/2)
+    ax.set_xticks(unique_vals)
+
+    ax.axvline(x=data.iloc[0], color='r', lw=2, label='Enacted plan, ' +str(np.round(calc_percentile(data[0], data),1))+'%')
 
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.set_ylim(0, 1)
-    ax.set_yticks([0, 0.25, 0.5, 0.75, 1])
-    ax.set_xticks([i for i in range(1, m+1)])
+    ax.legend(loc='upper right')
+    plt.show()
 
-    # Hide enough xlabels to that they don't overlap or look crowded
-    if k > 1:
-        for i,label in enumerate(ax.xaxis.get_ticklabels()):
-            if i%k:
-                label.set_visible(False)
+    if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
+    plt.clf()
+
+def make_violin_correlation(data, key, LRVS_col, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False, area_normalizer='Linf', current_plan_name='Enacted plan', vert=True, bw_method=0.1, alpha=0.8, dist_height=1, widths=0.2, points=200, **kwargs):
+    """
+    Parameters:
+        data (DataFrame)
+        key (str)
+        LRVS_col (str)
+    """
+
+    # Extract unique values
+    unique_vals = np.unique(data[key])
+
+    # Create a list of rows in the data corresponding to each unique value
+    LRVS_separated = [data[data[key]==unique_vals[i]][LRVS_col].values for i in range(len(unique_vals))]
+
+    # Get the minimum separation distance between the unique values
+    scale = np.min(unique_vals[1:]-unique_vals[:-1])
+
+    # Get the amount of data in each list
+    bar_heights = [len(samples) for samples in LRVS_separated]
+    width_scaling = np.min(bar_heights)/bar_heights
+
+    # Construct plot
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    result = ax.violinplot(LRVS_separated, positions=unique_vals, bw_method=bw_method, widths=widths, points=points, vert=vert, **kwargs)
+
+    # Normalize areas
+    if area_normalizer != 'Linf':
+        areas = get_areas(result['bodies'], norm=area_normalizer, vert=vert)
+        expand_polygons(result['bodies'], offsets=unique_vals, expansion=scale*width_scaling*dist_height*np.min(areas)/(areas*widths), vert=vert)
+    else:
+        expand_polygons(result['bodies'], offsets=unique_vals, expansion=scale*width_scaling*dist_height*np.ones_like(unique_vals)/widths, vert=vert)
+
+    # Set alpha
+    for pc in result['bodies']:
+        pc.set_alpha(alpha)
+
+    if vert:
+        ax.axhline(0.5, color="#cccccc")
+        ax.set_ylim(0.4, 0.6)
+        ax.set_yticks([0.4, 0.5, 0.6])
+        ax.set_xlim(np.min(unique_vals)-scale/2, np.max(unique_vals)+scale/2)
+        ax.set_xticks(unique_vals)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+    else:
+        ax.axvline(0.5, color="#cccccc")
+        ax.set_xlim(0.4, 0.6)
+        ax.set_xticks([0.4, 0.5, 0.6])
+        ax.set_ylim(np.min(unique_vals)-scale/2, np.max(unique_vals)+scale/2)
+        ax.set_yticks(unique_vals)
+        ax.set_ylabel(xlabel)
+        ax.set_xlabel(ylabel)
+
+    ax.set_title(title)
+    ax.legend(loc='lower right')
+
+    if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
+    plt.show()
+    plt.clf()
+
+def make_violin_correlation_3plots(data, key, LRVS_col, title='', ylabel='', common_xlabel='', xlabels='', figsize=(6,8), dpi=400, savetitle=None, save=False, area_normalizer='Linf', current_plan_name='Enacted plan', vert=True, bw_method=0.1, alpha=0.8, dist_height=1, widths=0.2, points=200, **kwargs):
+    """
+    Parameters:
+        data (DataFrame)
+        key (list) list of 3 strings
+        LRVS_col (list) list of 3 strings
+    """
+    # Construct plot
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize, dpi=dpi, sharey=True)
+
+    for i, ax in enumerate([ax1, ax2, ax3]):
+
+        # Extract unique values
+        unique_vals = np.unique(data[key[i]])
+
+        # Create a list of rows in the data corresponding to each unique value
+        LRVS_separated = [data[data[key[i]]==unique_vals[j]][LRVS_col[i]].values for j in range(len(unique_vals))]
+
+        # Get the minimum separation distance between the unique values
+        scale = np.min(unique_vals[1:]-unique_vals[:-1])
+
+        # Get the amount of data in each list
+        bar_heights = [len(samples) for samples in LRVS_separated]
+        width_scaling = np.min(bar_heights)/bar_heights
+
+        result = ax.violinplot(LRVS_separated, positions=unique_vals, bw_method=bw_method, widths=widths, points=points, vert=vert, **kwargs)
+
+        # Normalize areas
+        if area_normalizer != 'Linf':
+            areas = get_areas(result['bodies'], norm=area_normalizer, vert=vert)
+            expand_polygons(result['bodies'], offsets=unique_vals, expansion=scale*width_scaling*dist_height*np.min(areas)/(areas*widths), vert=vert)
+        else:
+            expand_polygons(result['bodies'], offsets=unique_vals, expansion=scale*width_scaling*dist_height*np.ones_like(unique_vals)/widths, vert=vert)
+
+        # Set alpha
+        for pc in result['bodies']:
+            pc.set_alpha(alpha)
+
+        ax.axhline(0.5, color="#cccccc")
+        ax.set_xlim(np.min(unique_vals)-scale/2, np.max(unique_vals)+scale/2)
+        ax.set_xticks(unique_vals)
+        ax.set_xlabel(xlabels[i])
+
+        ax.set_ylim(0.4, 0.6)
+        ax.set_yticks([0.4, 0.45, 0.5, 0.55, 0.6])
+        ax.legend(loc='lower right')
+
+    fig.suptitle(title, x=0.5, y=1)
+    fig.text(0.5, 0, common_xlabel, ha='center', va='bottom')
+    fig.text(0, 0.5, ylabel, ha='left', va='center', rotation='vertical')
+    fig.tight_layout()
+
+    if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
+    plt.show()
+    plt.clf()
+
+def make_scatter_correlation(data, key, LRVS_col, best_fit_line=True, ten_recom=False, step=None, title='', ylabel='', alpha=0.4, xlabel='', figsize=(8,6), dpi=400, savetitle=None, save=False):
+
+    n = len(data)
+    m = int(n/10)
+
+    if step is None:
+        step = max(1, int(n/10000))
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    y = data[LRVS_col].values[::step]
+    x = data[key].values[::step]
+
+    if best_fit_line: ax.axvline(0.0, c="#cccccc", lw=2)
+    ax.axhline(0.5, color="#cccccc", lw=2)
+
+    if ten_recom:
+        m = int(len(x)/10)
+        for j in range(10):
+            x1 = x[j*m:(j+1)*m].copy()
+            y1 = y[j*m:(j+1)*m].copy()
+            plt.scatter(x1, y1, s=1, alpha=alpha)
+    else:
+        plt.scatter(x, y, s=1, alpha=alpha)
+
+    plt.scatter(x[0], y[0], s=10, c='red', marker='*', label='Enacted Plan')
+
+    if best_fit_line:
+
+        # Draw a line of best fit
+        SStot = np.sum(np.square(y-np.mean(y)))
+        p, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
+        m, c = p[0], p[1]
+        SSres = np.sum(residuals)
+        R2 = 1-SSres/SStot
+        domain = np.linspace(np.min(x), np.max(x), 200)
+        plt.plot(domain, m*domain+c, label=r'Linear Best Fit, $R^2={}$'.format(np.round(R2, 2)), c='black', lw=1)
+
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.legend(loc='upper right')
+    plt.show()
+
+    if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
+    plt.clf()
+
+def make_scatter_correlation_3plots(data, key, LRVS_col, best_fit_line=True, ten_recom=False, step=None, title='', ylabel='', common_xlabel='', xlabels='', figsize=(8,6), dpi=400, alpha=0.4, savetitle=None, save=False):
+
+
+    # Construct plot
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize, dpi=dpi, sharey=True)
+
+    n = len(data)
+    m = int(n/10)
+
+    for i, ax in enumerate([ax1, ax2, ax3]):
+
+        if step is None: step = max(1, int(n/10000))
+
+        y = data[LRVS_col[i]].values[::step]
+        x = data[key[i]].values[::step]
+
+        if best_fit_line: ax.axvline(0.0, c="#cccccc", lw=1)
+        ax.axhline(0.5, color="#cccccc", lw=1)
+
+        if ten_recom:
+            m = int(len(x)/10)
+            for j in range(10):
+                x1 = x[j*m:(j+1)*m].copy()
+                y1 = y[j*m:(j+1)*m].copy()
+                ax.scatter(x1, y1, s=1, alpha=alpha)
+        else:
+            ax.scatter(x, y, s=1, alpha=alpha)
+
+        ax.scatter(x[0], y[0], s=10, c='red', marker='*', label='Enacted Plan')
+
+        if best_fit_line:
+
+            # Draw a line of best fit
+            SStot = np.sum(np.square(y-np.mean(y)))
+            p, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
+            m, c = p[0], p[1]
+            SSres = np.sum(residuals)
+            R2 = 1-SSres/SStot
+            domain = np.linspace(np.min(x), np.max(x), 200)
+            ax.plot(domain, m*domain+c, label= r'$R^2={}$'.format(np.round(R2, 2)), c='black', lw=1)
+
+        ax.set_xlabel(xlabels[i])
+
+        ax.set_ylim(0.4, 0.6)
+        ax.set_yticks([0.4, 0.45, 0.5, 0.55, 0.6])
+        ax.legend(loc='best')
+
+    fig.suptitle(title, x=0.5, y=1)
+    fig.text(0.5, 0, common_xlabel, ha='center', va='bottom')
+    fig.text(0, 0.5, ylabel, ha='left', va='center', rotation='vertical')
+    fig.tight_layout()
+
+    plt.show()
+
+
+def make_10step_histogram(data, LRVS_col, bins=200, discard=0.1, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False):
+
+    n = len(data)
+    m = int(n/10)
+
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    x = data[LRVS_col].values
+
+    for i in range(10):
+        if i > 0:
+            label = 'Recom {}'.format(i)
+        else:
+            label = 'Original'
+        x1 = pd.Series(x[i*m:(i+1)*m].copy())
+        x1[int(discard*m):].hist(ax = ax, bins = bins, alpha = .1, color='C'+str(i))
+        x1[int(discard*m):].hist(ax = ax, histtype='step', bins = bins, lw=1, facecolor='None', color='C'+str(i), label=label)
+        ax.axvline(x1[0], lw=2, color='C'+str(i))
+
+    ax.axvline(0.5, color="#cccccc")
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.legend(loc='upper right')
+    plt.show()
 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
     plt.clf()
@@ -260,6 +619,11 @@ def make_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dpi=400, file_
     # Set parameters
     params = {'figsize':figsize, 'dpi':dpi, 'save':True}
     n = len(data)
+    if n == 10**8:
+        n = '100M'
+    elif n == 10**7:
+        n = '10M'
+
     m = int((len(data.columns)-21)/5)
 
     pp = data.iloc[:, 21:21+m]
@@ -269,6 +633,11 @@ def make_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dpi=400, file_
     pop = data.iloc[:, 21+m:21+2*m]
     data['Population Standard Deviation, % of Ideal'] = pop.std(axis=1, ddof=0)/pop.mean(axis=1)
     data['Population Max-Min, % of Ideal'] = (pop.max(axis=1) - pop.min(axis=1))/pop.mean(axis=1)
+
+    # Switch sign of signed measures to match convention
+    data.iloc[:, 6:15] = -data.iloc[:, 6:15]
+
+
 
     # Set parameters
     common_file_ending = '-'+str(len(data))+'-'+kind+'-'+str(idnum)+file_type
@@ -407,7 +776,7 @@ def make_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dpi=400, file_
                                                   'savetitle': subdirectory+'MaxMinPop'+common_file_ending},
             }
 
-    print('Finished Importing Data')
+
 
     # Box plot: Senate 2010
     key = 'Box Plot Sen 2010'
@@ -455,7 +824,7 @@ def make_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dpi=400, file_
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
         metric = pd.Series(data[key])
         metric.hist(bins=50)
-        ax.axvline(x=metric[0], color='r', lw=2, label='2012 plan, '+str(np.round(calc_percentile(metric[0], metric),1))+'%')
+        ax.axvline(x=metric[0], color='r', lw=2, label='Enacted plan, '+str(np.round(calc_percentile(metric[0], metric),1))+'%')
         ax.set_title(metricplots[key]['title'])
         ax.set_xlabel(metricplots[key]['xlabel'])
         ax.set_ylabel(metricplots[key]['ylabel'])
@@ -539,7 +908,7 @@ def make_correlation_plots(idnum, kind, comment='', step=None, subdirectory='Plo
             R2 = 1-SSres/SStot
             domain = np.linspace(np.min(x), np.max(x), 200)
 
-            plt.plot(domain, m*domain+c, label='Best Fit, R^2={}, m={}'.format(np.round(R2, 2), np.round(m, 2)), c='orange')
+            plt.plot(domain, m*domain+c, label=r'Best Fit, $R^2={}, m={}$'.format(np.round(R2, 2), np.round(m, 2)), c='orange')
             ax.axhline(0.5, color="#cccccc")
             ax.set_title(correlationplot_xaxis[key1]['name']+' and R Vote Share in Least R District in a {}-Plan Ensemble'.format(n)+correlationplot_yaxis[key]['title'])
             ax.set_xlabel(correlationplot_xaxis[key1]['name'])
