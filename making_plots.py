@@ -2,24 +2,29 @@
 from plotting import *
 
 # Uniform Ensemble A
-uAfilename = '/data1/acme/Elections/Uniform_Flips/Utah_ensemble_Dec_2020_original_US_District_flips99999999.parquet'
+#uAfilename = '/data1/acme/Elections/Uniform_Flips/Utah_ensemble_Dec_2020_original_US_District_flips99999999.parquet'
+uAfilename = '10k_sampled/real_uniformA.parquet.gzip'
 
 # Weighted Ensemble A
-wAfilename = '/data1/acme/Elections/jwmurri_files/1608336391d.parquet.gzip'
+#wAfilename = '/data1/acme/Elections/jwmurri_files/1608336391d.parquet.gzip'
+wAfilename = '10k_sampled/uniformA.parquet.gzip'
 
 # Uniform Ensemble B
-uBfilename = '/data1/acme/Elections/Uniform_Flips/'
+#uBfilename = '/data1/acme/Elections/Uniform_Flips/Utah_ensemble_Dec_2020_original_US_District_flips99999999.parquet'
 
 # Weighted Ensemble B
-wBfilename = '/data1/acme/Elections/jwmurri_files/10chains10000000d.parquet.gzip'
+#wBfilename = '/data1/acme/Elections/jwmurri_files/10chains10000000d.parquet.gzip'
 
 # Recom ensemble
-recom_filename = '/data1/acme/Elections/Uniform_Recom/'
+#recom_filename = '/data1/acme/Elections/Uniform_Recom/Utah_ensemble_recom_paper.parquet'
+recom_filename = '10k_sampled/recom.parquet.gzip'
 
 # Filename dictionary
-filenames = {'UniformA': uAfilename, 'WeightedA': wAfilename, 'UniformB': uBfilename, 'WeightedB': wBfilename, 'Recom': recom_filename}
-formal_names = {'UniformA': 'Uniform Emsemble A (100M Plans)',
-                'WeightedA': 'Weighted Ensemble A (100M Plans)',
+# filenames = {'UniformA': uAfilename, 'WeightedA': wAfilename, 'UniformB': uBfilename, 'WeightedB': wBfilename, 'Recom': recom_filename}
+filenames = {'UniformA': uAfilename, 'WeightedA': wAfilename, 'Recom': recom_filename}
+
+formal_names = {'UniformA': 'Uniform Emsemble (100M Plans)',
+                'WeightedA': 'Weighted Ensemble (100M Plans)',
                 'UniformB': 'Uniform Ensemble B (100M Plans)',
                 'WeightedB': 'Weighted Ensemble B (100M Plans)',
                 'Recom': 'Recom Ensemble (1M Plans)'}
@@ -94,10 +99,9 @@ def annika_data_transform(df):
                       'Sorted CombRep Vote Share 3': 'Sorted CombRep Vote Share 3',
                       'Sorted CombRep Vote Share 4': 'Sorted CombRep Vote Share 4'}
 
-    col_index_map = np.array([6, 12, 9, 15, 18, 3, 7, 13, 10, 16, 19, 4, 8, 14, 11, 17, 20, 5, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40])
+    # col_index_map = np.array([6, 12, 9, 15, 18, 3, 7, 13, 10, 16, 19, 4, 8, 14, 11, 17, 20, 5, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40])
 
-
-
+    df.rename(columns=column_renames, inplace=True)
 
 
 def make_all_figsizes(ensemble_type, subdirectory='Plots/', dpi=300, just_one=None):
@@ -111,7 +115,7 @@ def make_all_figsizes(ensemble_type, subdirectory='Plots/', dpi=300, just_one=No
 
     # Transform data to Jacob's format if necessary
     if 'Uniform' in ensemble_type:
-        data = annika_data_transform(data)
+        annika_data_transform(data)
 
     if just_one is not None:
         make_all_plots(data, ensemble_type, just_one, subdirectory, dpi)
@@ -158,26 +162,51 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
     ensemble = ensemble_type
 
     # Number of categories
-    m = int((len(data.columns)-21)/5)
+    m = 4
 
     # Switch sign of signed measures to match convention
-    data.iloc[:, 6:15] = -data.iloc[:, 6:15]
+    signed_measures = ['Partisan Bias - SEN', 'Partisan Bias - G', 'Partisan Bias - COMB', 'Efficiency Gap - SEN', 'Efficiency Gap - G', 'Efficiency Gap - COMB', 'Mean Median - SEN', 'Mean Median - G', 'Mean Median - COMB']
+    data[signed_measures] = -data[signed_measures]
+    # data.iloc[:, 6:15] = -data.iloc[:, 6:15]
 
     # Append current plan data
     data = pd.concat((enacted_plan, data))
 
-    pp = data.iloc[:, 21:21+m]
-    data['Mean Polsby Popper'] = pp.mean(axis=1)
-    data['Max Polsby Popper'] = pp.max(axis=1)
+    try:
+        pp = data[['PP1', 'PP2', 'PP3', 'PP4']]
+        # pp = data.iloc[:, 21:21+m]
+        data['Mean Polsby Popper'] = pp.mean(axis=1)
+        data['Max Polsby Popper'] = pp.max(axis=1)
+    except KeyError:
+        print('Polsby-popper data not available')
 
-    pop = data.iloc[:, 21+m:21+2*m]
-    data['Population Standard Deviation, % of Ideal'] = pop.std(axis=1, ddof=0)/pop.mean(axis=1)
-    data['Population Max-Min, % of Ideal'] = (pop.max(axis=1) - pop.min(axis=1))/pop.mean(axis=1)
+    try:
+        # pop = data.iloc[:, 21+m:21+2*m]
+        pop = data[['POP1', 'POP2', 'POP3', 'POP4']]
+        data['Population Standard Deviation, % of Ideal'] = pop.std(axis=1, ddof=0)/pop.mean(axis=1)
+        data['Population Max-Min, % of Ideal'] = (pop.max(axis=1) - pop.min(axis=1))/pop.mean(axis=1)
+    except KeyError:
+        print('Population data not available')
+
+    # Vote Shares
+    sen10 = ['Sorted SenRep Vote Share 1', 'Sorted SenRep Vote Share 2', 'Sorted SenRep Vote Share 3', 'Sorted SenRep Vote Share 4']
+    gov10 = ['Sorted GRep Vote Share 1', 'Sorted GRep Vote Share 2', 'Sorted GRep Vote Share 3', 'Sorted GRep Vote Share 4']
+    comb10 = ['Sorted CombRep Vote Share 1', 'Sorted CombRep Vote Share 2', 'Sorted CombRep Vote Share 3', 'Sorted CombRep Vote Share 4']
+
+    vote_share_sen10 = pd.DataFrame(data[sen10].values, columns=np.arange(1, m+1))
+    data['Stdev-SEN'] = np.std(vote_share_sen10, axis=1)
+
+    vote_share_gov10 = pd.DataFrame(data[gov10].values, columns=np.arange(1, m+1))
+    data['Stdev-GOV'] = np.std(vote_share_gov10, axis=1)
+
+    vote_share_comb10 = pd.DataFrame(data[comb10].values, columns=np.arange(1, m+1))
+    data['Stdev-COMB'] = np.std(vote_share_comb10, axis=1)
+
 
     # Get buffered declination data
-    data['Buffered Declination - SEN'] = declination_utah(data.iloc[:, 21+2*m:21+3*m].values)
-    data['Buffered Declination - G'] = declination_utah(data.iloc[:, 21+3*m:21+4*m].values)
-    data['Buffered Declination - COMB'] = declination_utah(data.iloc[:, 21+4*m:21+5*m].values)
+    data['Buffered Declination - SEN'] = declination_utah(data[sen10].values)
+    data['Buffered Declination - G'] = declination_utah(data[gov10].values)
+    data['Buffered Declination - COMB'] = declination_utah(data[comb10].values)
 
     # Discretize efficiency_gap scores
     for i in range(9, 12):
@@ -226,7 +255,6 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
 
     # Box plot: Senate 2010
     key = 'Box Plot Sen 2010'
-    vote_share_sen10 = pd.DataFrame(list(data.iloc[:, 21+2*m:21+3*m].values), columns=np.arange(1, m+1))
     make_box_plot(vote_share_sen10, **boxplots[key], **params)
     print('Finished Box Plot 1')
 
@@ -240,7 +268,6 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
 
     # Box plot: Governor 2010
     key = 'Box Plot Gov 2010'
-    vote_share_gov10 = pd.DataFrame(list(data.iloc[:, 21+3*m:21+4*m].values), columns=np.arange(1, m+1))
     make_box_plot(vote_share_gov10, **boxplots[key], **params)
 
     print('Finished Box Plot 2')
@@ -253,7 +280,6 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
 
     # Box plot: Governor 2010
     key = 'Box Plot Comb 2010'
-    vote_share_comb10 = pd.DataFrame(list(data.iloc[:, 21+4*m:21+5*m].values), columns=np.arange(1, m+1))
     make_box_plot(vote_share_comb10, **boxplots[key], **params)
 
     print('Finished Box Plot 3')
@@ -385,21 +411,36 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
                                                   'xlabel': 'Largest Deviation in District Populations (Max-Min, % of Ideal)',
                                                   'ylabel': ylabel,
                                                   'savetitle': f'{subdirectory}{ensemble}-PopMaxMin-Histogram-{figsize_code}-{dpi}dpi.pdf'},
+                    'Stdev-SEN': {'title': 'Standard Deviation of Vote Shares in {}'.format(formal_names[ensemble_type]),
+                                                  'xlabel': 'Standard Deviation of Vote Shares (Senate 2010)',
+                                                  'ylabel': ylabel,
+                                                  'savetitle': f'{subdirectory}{ensemble}-SEN-StdevVS-Histogram-{figsize_code}-{dpi}dpi.pdf'},
+                    'Stdev-GOV': {'title': 'Standard Deviation of Vote Shares in {}'.format(formal_names[ensemble_type]),
+                                                  'xlabel': 'Standard Deviation of Vote Shares (Gubernatorial 2010)',
+                                                  'ylabel': ylabel,
+                                                  'savetitle': f'{subdirectory}{ensemble}-GOV-StdevVS-Histogram-{figsize_code}-{dpi}dpi.pdf'},
+                    'Stdev-COMB': {'title': 'Standard Deviation of Vote Shares in {}'.format(formal_names[ensemble_type]),
+                                                  'xlabel': 'Standard Deviation of Vote Shares (Combined 2010)',
+                                                  'ylabel': ylabel,
+                                                  'savetitle': f'{subdirectory}{ensemble}-COMB-StdevVS-Histogram-{figsize_code}-{dpi}dpi.pdf'},
             }
 
 
     for key, p in metricplots.items():
         counter += 1
-        metric = pd.Series(data[key])
-        if 'Histogram' in p['savetitle']:
-            if 'Cut Edges' in key:
-                make_histogram(metric, bins=len(np.unique(metric)), **params, **p)
-            else:
-                make_histogram(metric, bins=99, **params, **p)
-        elif 'BarChart' in p['savetitle']:
-            make_bar_chart(metric, **params, **p)
-
-        print(f'Finished Plot {counter}')
+        try:
+            metric = pd.Series(data[key])
+            if 'Histogram' in p['savetitle']:
+                if 'Cut Edges' in key:
+                    make_histogram(metric, bins=len(np.unique(metric)), **params, **p)
+                else:
+                    make_histogram(metric, bins=99, **params, **p)
+            elif 'BarChart' in p['savetitle']:
+                make_bar_chart(metric, **params, **p)
+        except KeyError:
+            print(f'There was a KeyError with {key}')
+        else:
+            print(f'Finished Plot {counter}')
 
     plt.close('all')
 
@@ -545,20 +586,39 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
                                                   'ylabel': f'{ylabel} (Combined 2010)',
                                                   'savetitle': f'{subdirectory}{ensemble}-COMB-PopMaxMin-LRVSCorr-ScatterPlot-{figsize_code}-{dpi}dpi.pdf',
                                                   'LRVS_col': 'Sorted CombRep Vote Share 1'},
+                    'Stdev-SEN': {'title': 'Standard Deviation of Vote Shares and LRVS in {}'.format(formal_names[ensemble_type]),
+                                                  'xlabel': 'Standard Deviation of Vote Shares (Senate 2010)',
+                                                  'ylabel': f'{ylabel} (Senate 2010)',
+                                                  'savetitle': f'{subdirectory}{ensemble}-SEN-StdevVS-LRVSCorr-ScatterPlot-{figsize_code}-{dpi}dpi.pdf',
+                                                  'LRVS_col': 'Sorted SenRep Vote Share 1'},
+                    'Stdev-GOV': {'title': 'Standard Deviation of Vote Shares and LRVS in {}'.format(formal_names[ensemble_type]),
+                                                  'xlabel': 'Standard Deviation of Vote Shares (Gubernatorial 2010)',
+                                                  'ylabel': f'{ylabel} (Gubernatorial 2010)',
+                                                  'savetitle': f'{subdirectory}{ensemble}-GOV-StdevVS-LRVSCorr-ScatterPlot-{figsize_code}-{dpi}dpi.pdf',
+                                                  'LRVS_col': 'Sorted GRep Vote Share 1'},
+                    'Stdev-COMB': {'title': 'Standard Deviation of Vote Shares and LRVS in {}'.format(formal_names[ensemble_type]),
+                                                  'xlabel': 'Standard Deviation of Vote Shares (Combined 2010)',
+                                                  'ylabel': f'{ylabel} (Combined 2010)',
+                                                  'savetitle': f'{subdirectory}{ensemble}-COMB-StdevVS-LRVSCorr-ScatterPlot-{figsize_code}-{dpi}dpi.pdf',
+                                                  'LRVS_col': 'Sorted CombRep Vote Share 1'}
             }
 
     for key, p in corrplots.items():
         counter += 1
-        if 'Scatter' in p['savetitle']:
-            ten_recom = 'B' in ensemble_type
-            best_fit_line = ('Avg Abs' not in key) and ('Partisan Gini' not in key) and ('Buffered' not in key)
+        try:
+            if 'Scatter' in p['savetitle']:
+                ten_recom = 'B' in ensemble_type
+                best_fit_line = ('Avg Abs' not in key) and ('Partisan Gini' not in key) and ('Buffered' not in key)
 
-            make_scatter_correlation(data, key, best_fit_line=best_fit_line, ten_recom=ten_recom, **params, **p)
+                make_scatter_correlation(data, key, best_fit_line=best_fit_line, ten_recom=ten_recom, **params, **p)
 
-        elif 'Violin' in p['savetitle']:
-            make_violin_correlation(data, key, **params, **p)
+            elif 'Violin' in p['savetitle']:
+                make_violin_correlation(data, key, **params, **p)
 
-        print(f'Finished Plot {counter}')
+        except KeyError:
+            print(f'There was an error with {key}.')
+        else:
+            print(f'Finished Plot {counter}')
 
     plt.close('all')
 
@@ -622,7 +682,11 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
                  {'keys': ['Buffered Declination - SEN', 'Buffered Declination - G', 'Buffered Declination - COMB'],
                    'title': 'Buffered Declination and LRVS in {}'.format(formal_names[ensemble_type]),
                    'xlabel': 'Buffered Declination',
-                   'savetitle': f'{subdirectory}{ensemble}-BufferedDeclination-LRVSCorr-3ScatterPlot-{figsize_code}-{dpi}dpi.pdf'}
+                   'savetitle': f'{subdirectory}{ensemble}-BufferedDeclination-LRVSCorr-3ScatterPlot-{figsize_code}-{dpi}dpi.pdf'},
+                 {'keys': ['Stdev-SEN', 'Stdev-GOV', 'Stdev-COMB'],
+                   'title': 'Standard Deviation of Vote Shares and LRVS in {}'.format(formal_names[ensemble_type]),
+                   'xlabel': 'StandardDeviation of Vote Shares',
+                   'savetitle': f'{subdirectory}{ensemble}-StdevVS-LRVSCorr-3ScatterPlot-{figsize_code}-{dpi}dpi.pdf'}
                 ]
 
     for p in corrplots:
@@ -639,8 +703,8 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
 
         print(f'Finished Plot {counter}')
 
-
-
-
-
     plt.close('all')
+
+make_all_figsizes('WeightedA', subdirectory='PaperPlots/', dpi=300)
+make_all_figsizes('Recom', subdirectory='PaperPlots/', dpi=300)
+make_all_figsizes('UniformA', subdirectory='PaperPlots/', dpi=300)
