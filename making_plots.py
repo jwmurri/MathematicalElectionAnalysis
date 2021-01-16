@@ -1,23 +1,27 @@
 # Use tools from plotting file
 from plotting import *
 
+sampling = '1M_sampled/'
 # Uniform Ensemble A
-#uAfilename = '/data1/acme/Elections/Uniform_Flips/Utah_ensemble_Dec_2020_original_US_District_flips99999999.parquet'
-uAfilename = '10k_sampled/real_uniformA.parquet.gzip'
+#uAfilename = '/../../../data1/acme/Elections/Uniform_Flips/Utah_ensemble_Dec_2020_original_US_District_flips99999999.parquet'
+#uAfilename = 'Utah_ensemble_Dec_2020_original_US_District_flips.parquet'
+uAfilename = sampling + 'UniformA.parquet.gzip'
 
 # Weighted Ensemble A
-#wAfilename = '/data1/acme/Elections/jwmurri_files/1608336391d.parquet.gzip'
-wAfilename = '10k_sampled/uniformA.parquet.gzip'
+#wAfilename = '/../../../data1/acme/Elections/jwmurri_files/1608336391d.parquet.gzip'
+#wAfilename = '10k_sampled/uniformA.parquet.gzip'
+wAfilename = sampling + 'WeightedA.parquet.gzip'
 
 # Uniform Ensemble B
-#uBfilename = '/data1/acme/Elections/Uniform_Flips/Utah_ensemble_Dec_2020_original_US_District_flips99999999.parquet'
+#uBfilename = '/../../../data1/acme/Elections/Uniform_Flips/Utah_ensemble_Dec_2020_original_US_District_flips99999999.parquet'
 
 # Weighted Ensemble B
-#wBfilename = '/data1/acme/Elections/jwmurri_files/10chains10000000d.parquet.gzip'
+#wBfilename = '/../../../data1/acme/Elections/jwmurri_files/10chains10000000d.parquet.gzip'
 
 # Recom ensemble
-#recom_filename = '/data1/acme/Elections/Uniform_Recom/Utah_ensemble_recom_paper.parquet'
-recom_filename = '10k_sampled/recom.parquet.gzip'
+#recom_filename = '/../../../data1/acme/Elections/Uniform_Recom/Utah_ensemble_recom_paper.parquet'
+#recom_filename = 'Utah_ensemble_recom_paper.parquet'
+recom_filename = sampling + 'Recom.parquet.gzip'
 
 # Filename dictionary
 # filenames = {'UniformA': uAfilename, 'WeightedA': wAfilename, 'UniformB': uBfilename, 'WeightedB': wBfilename, 'Recom': recom_filename}
@@ -102,6 +106,7 @@ def annika_data_transform(df):
     # col_index_map = np.array([6, 12, 9, 15, 18, 3, 7, 13, 10, 16, 19, 4, 8, 14, 11, 17, 20, 5, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40])
 
     df.rename(columns=column_renames, inplace=True)
+    df[['Seats Won - SEN', 'Seats Won - G', 'Seats Won - COMB']] = 4-df[['Seats Won - SEN', 'Seats Won - G', 'Seats Won - COMB']]
 
 
 def make_all_figsizes(ensemble_type, subdirectory='Plots/', dpi=300, just_one=None):
@@ -111,10 +116,12 @@ def make_all_figsizes(ensemble_type, subdirectory='Plots/', dpi=300, just_one=No
     assert ensemble_type in list(filenames.keys())
 
     # Import data
+    f = filenames[ensemble_type]
+    print(f'Importing data from {f}')
     data  = pd.read_parquet(filenames[ensemble_type])
 
     # Transform data to Jacob's format if necessary
-    if 'Uniform' in ensemble_type:
+    if 'm' in ensemble_type:
         annika_data_transform(data)
 
     if just_one is not None:
@@ -170,7 +177,7 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
     # data.iloc[:, 6:15] = -data.iloc[:, 6:15]
 
     # Append current plan data
-    data = pd.concat((enacted_plan, data))
+    data = pd.concat((enacted_plan[list(data.columns)], data))
 
     try:
         pp = data[['PP1', 'PP2', 'PP3', 'PP4']]
@@ -194,14 +201,13 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
     comb10 = ['Sorted CombRep Vote Share 1', 'Sorted CombRep Vote Share 2', 'Sorted CombRep Vote Share 3', 'Sorted CombRep Vote Share 4']
 
     vote_share_sen10 = pd.DataFrame(data[sen10].values, columns=np.arange(1, m+1))
-    data['Stdev-SEN'] = np.std(vote_share_sen10, axis=1)
+    data['Stdev-SEN'] = np.std(data[sen10].values, axis=1)
 
     vote_share_gov10 = pd.DataFrame(data[gov10].values, columns=np.arange(1, m+1))
-    data['Stdev-GOV'] = np.std(vote_share_gov10, axis=1)
+    data['Stdev-GOV'] = np.std(data[gov10].values, axis=1)
 
     vote_share_comb10 = pd.DataFrame(data[comb10].values, columns=np.arange(1, m+1))
-    data['Stdev-COMB'] = np.std(vote_share_comb10, axis=1)
-
+    data['Stdev-COMB'] = np.std(data[comb10].values, axis=1)
 
     # Get buffered declination data
     data['Buffered Declination - SEN'] = declination_utah(data[sen10].values)
@@ -209,12 +215,12 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
     data['Buffered Declination - COMB'] = declination_utah(data[comb10].values)
 
     # Discretize efficiency_gap scores
-    for i in range(9, 12):
-        eg = np.array(data.iloc[:, i])
-        mask = eg < 0
-        eg[mask] = np.mean(eg[mask], axis=0)
-        eg[~mask] = np.mean(eg[~mask], axis=0)
-        data.iloc[:, i] = eg
+    #for i in range(9, 12):
+    #    eg = np.array(data.iloc[:, i])
+    #    mask = eg < 0
+    #    eg[mask] = np.mean(eg[mask], axis=0)
+    #    eg[~mask] = np.mean(eg[~mask], axis=0)
+    #    data.iloc[:, i] = eg
 
     #1: Vote share distribution plots
     title = 'Vote Shares in {}'.format(formal_names[ensemble_type])
@@ -258,8 +264,6 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
     make_box_plot(vote_share_sen10, **boxplots[key], **params)
     print('Finished Box Plot 1')
 
-    print(vote_share_sen10)
-
     # Violin plot: Senate 2010
     key = 'Violin Plot Sen 2010'
     make_violin_plot(vote_share_sen10, **boxplots[key], **params)
@@ -297,6 +301,7 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
 
     #2: Summary plots for other metrics
 
+
     ylabel = 'Number of Plans'
 
     metricplots = {'Avg Abs Partisan Dislocation - SEN': {'title': 'Avg Abs Partisan Dislocation in {}'.format(formal_names[ensemble_type]),
@@ -326,15 +331,15 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
                     'Efficiency Gap - SEN': {'title': 'Efficiency Gap in {}'.format(formal_names[ensemble_type]),
                                                   'xlabel': 'Efficiency Gap (Senate 2010)',
                                                   'ylabel': ylabel,
-                                                  'savetitle': f'{subdirectory}{ensemble}-SEN-EfficiencyGap-BarChart-{figsize_code}-{dpi}dpi.pdf'},
+                                                  'savetitle': f'{subdirectory}{ensemble}-SEN-EfficiencyGap-Histogram-{figsize_code}-{dpi}dpi.pdf'},
                     'Efficiency Gap - G': {'title': 'Efficiency Gap in {}'.format(formal_names[ensemble_type]),
                                                   'xlabel': 'Efficiency Gap (Gubernatorial 2010)',
                                                   'ylabel': ylabel,
-                                                  'savetitle': f'{subdirectory}{ensemble}-GOV-EfficiencyGap-BarChart-{figsize_code}-{dpi}dpi.pdf'},
+                                                  'savetitle': f'{subdirectory}{ensemble}-GOV-EfficiencyGap-Histogram-{figsize_code}-{dpi}dpi.pdf'},
                     'Efficiency Gap - COMB': {'title': 'Efficiency Gap in {}'.format(formal_names[ensemble_type]),
                                                   'xlabel': 'Efficiency Gap (Combined 2010)',
                                                   'ylabel': ylabel,
-                                                  'savetitle': f'{subdirectory}{ensemble}-COMB-EfficiencyGap-BarChart-{figsize_code}-{dpi}dpi.pdf'},
+                                                  'savetitle': f'{subdirectory}{ensemble}-COMB-EfficiencyGap-Histogram-{figsize_code}-{dpi}dpi.pdf'},
                     'Partisan Bias - SEN': {'title': 'Partisan Bias Score in {}'.format(formal_names[ensemble_type]),
                                                   'xlabel': 'Partisan Bias Score (Senate 2010)',
                                                   'ylabel': ylabel,
@@ -394,7 +399,7 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
                     'Cut Edges' :  {'title': 'Number of Cut Edges in {}'.format(formal_names[ensemble_type]),
                                                   'xlabel': 'Number of Cut Edges',
                                                   'ylabel': ylabel,
-                                                  'savetitle': f'{subdirectory}{ensemble}-CutEdges-Histogram-{figsize_code}-{dpi}dpi.pdf'},
+                                                  'savetitle': f'{subdirectory}{ensemble}-CutEdges-BarChart-{figsize_code}-{dpi}dpi.pdf'},
                     'Mean Polsby Popper':  {'title': 'Mean Polsby-Popper Score in {}'.format(formal_names[ensemble_type]),
                                                   'xlabel': 'Mean Polsby-Popper Score',
                                                   'ylabel': ylabel,
@@ -425,18 +430,22 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
                                                   'savetitle': f'{subdirectory}{ensemble}-COMB-StdevVS-Histogram-{figsize_code}-{dpi}dpi.pdf'},
             }
 
-
     for key, p in metricplots.items():
         counter += 1
         try:
             metric = pd.Series(data[key])
             if 'Histogram' in p['savetitle']:
-                if 'Cut Edges' in key:
-                    make_histogram(metric, bins=len(np.unique(metric)), **params, **p)
-                else:
-                    make_histogram(metric, bins=99, **params, **p)
+                if len(data) > 999999:
+                    bins = 200
+                elif len(data) > 9999999:
+                    bins = 300
+                make_histogram(metric, bins=bins, **params, **p)
             elif 'BarChart' in p['savetitle']:
-                make_bar_chart(metric, **params, **p)
+                if 'Cut Edges' not in key:
+                    make_bar_chart(metric, **params, **p)
+                else:
+                    make_bar_chart(metric, width=1, histogram_like=True, **params, **p)
+
         except KeyError:
             print(f'There was a KeyError with {key}')
         else:
@@ -446,6 +455,9 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
 
 
     #3. Correlation Plots
+
+    ylabel = 'LRVS'
+
     corrplots = {'Avg Abs Partisan Dislocation - SEN': {'title': 'Avg Abs Partisan Dislocation and LRVS in {}'.format(formal_names[ensemble_type]),
                                                   'xlabel': 'Average Absolute Partisan Dislocation (Senate 2010)',
                                                   'ylabel': f'{ylabel} (Senate 2010)',
@@ -479,17 +491,17 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
                     'Efficiency Gap - SEN': {'title': 'Efficiency Gap and LRVS in {}'.format(formal_names[ensemble_type]),
                                                   'xlabel': 'Efficiency Gap (Senate 2010)',
                                                   'ylabel': f'{ylabel} (Senate 2010)',
-                                                  'savetitle': f'{subdirectory}{ensemble}-SEN-EfficiencyGap-LRVSCorr-ViolinPlot-{figsize_code}-{dpi}dpi.pdf',
+                                                  'savetitle': f'{subdirectory}{ensemble}-SEN-EfficiencyGap-LRVSCorr-ScatterPlot-{figsize_code}-{dpi}dpi.pdf',
                                                   'LRVS_col': 'Sorted SenRep Vote Share 1'},
                     'Efficiency Gap - G': {'title': 'Efficiency Gap in and LRVS {}'.format(formal_names[ensemble_type]),
                                                   'xlabel': 'Efficiency Gap (Gubernatorial 2010)',
                                                   'ylabel': f'{ylabel} (Gubernatorial 2010)',
-                                                  'savetitle': f'{subdirectory}{ensemble}-GOV-EfficiencyGap-LRVSCorr-ViolinPlot-{figsize_code}-{dpi}dpi.pdf',
+                                                  'savetitle': f'{subdirectory}{ensemble}-GOV-EfficiencyGap-LRVSCorr-ScatterPlot-{figsize_code}-{dpi}dpi.pdf',
                                                   'LRVS_col': 'Sorted GRep Vote Share 1'},
                     'Efficiency Gap - COMB': {'title': 'Efficiency Gap and LRVS in {}'.format(formal_names[ensemble_type]),
                                                   'xlabel': 'Efficiency Gap (Combined 2010)',
                                                   'ylabel': f'{ylabel} (Combined 2010)',
-                                                  'savetitle': f'{subdirectory}{ensemble}-COMB-EfficiencyGap-LRVSCorr-ViolinPlot-{figsize_code}-{dpi}dpi.pdf',
+                                                  'savetitle': f'{subdirectory}{ensemble}-COMB-EfficiencyGap-LRVSCorr-ScatterPlot-{figsize_code}-{dpi}dpi.pdf',
                                                   'LRVS_col': 'Sorted CombRep Vote Share 1'},
                     'Partisan Bias - SEN': {'title': 'Partisan Bias Score and LRVS in {}'.format(formal_names[ensemble_type]),
                                                   'xlabel': 'Partisan Bias Score (Senate 2010)',
@@ -608,14 +620,14 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
         try:
             if 'Scatter' in p['savetitle']:
                 ten_recom = 'B' in ensemble_type
-                best_fit_line = ('Avg Abs' not in key) and ('Partisan Gini' not in key) and ('Buffered' not in key)
+                best_fit_line = ('Avg Abs' not in key) and ('Partisan Gini' not in key) and ('Buffered' not in key) and ('Efficiency' not in key)
 
                 make_scatter_correlation(data, key, best_fit_line=best_fit_line, ten_recom=ten_recom, **params, **p)
 
             elif 'Violin' in p['savetitle']:
                 make_violin_correlation(data, key, **params, **p)
 
-        except KeyError:
+        except:
             print(f'There was an error with {key}.')
         else:
             print(f'Finished Plot {counter}')
@@ -670,7 +682,7 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
                  {'keys': ['Partisan Bias - SEN', 'Partisan Bias - G', 'Partisan Bias - COMB'],
                   'title': 'Partisan Bias and LRVS in {}'.format(formal_names[ensemble_type]),
                   'xlabel': 'Partisan Bias',
-                  'savetitle': f'{subdirectory}{ensemble}-PartisanBias-LRVSCorr-3ScatterPlot-{figsize_code}-{dpi}dpi.pdf'},
+                  'savetitle': f'{subdirectory}{ensemble}-PartisanBias-LRVSCorr-3ViolinPlot-{figsize_code}-{dpi}dpi.pdf'},
                  {'keys': ['Partisan Gini - SEN', 'Partisan Gini - G', 'Partisan Gini - COMB'],
                   'title': 'Partisan Gini and LRVS in {}'.format(formal_names[ensemble_type]),
                   'xlabel': 'Partisan Gini',
@@ -678,7 +690,7 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
                  {'keys': ['Seats Won - SEN', 'Seats Won - G', 'Seats Won - COMB'],
                   'title': 'Districts Won and LRVS in {}'.format(formal_names[ensemble_type]),
                   'xlabel': 'Districts Won',
-                  'savetitle': f'{subdirectory}{ensemble}-SeatsWon-LRVSCorr-3ScatterPlot-{figsize_code}-{dpi}dpi.pdf'},
+                  'savetitle': f'{subdirectory}{ensemble}-SeatsWon-LRVSCorr-3ViolinPlot-{figsize_code}-{dpi}dpi.pdf'},
                  {'keys': ['Buffered Declination - SEN', 'Buffered Declination - G', 'Buffered Declination - COMB'],
                    'title': 'Buffered Declination and LRVS in {}'.format(formal_names[ensemble_type]),
                    'xlabel': 'Buffered Declination',
@@ -694,7 +706,7 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
         if 'Scatter' in p['savetitle']:
             ten_recom = 'B' in ensemble_type
             key = p['keys'][0]
-            best_fit_line = ('Avg Abs' not in key) and ('Partisan Gini' not in key) and ('Buffered' not in key)
+            best_fit_line = ('Avg Abs' not in key) and ('Partisan Gini' not in key) and ('Buffered' not in key) and ('Efficiency' not in key)
 
             make_scatter_correlation_3plots(data, p['keys'], LRVS_col=LRVS_cols, title=p['title'], ylabel=ylabel, common_xlabel=p['xlabel'], xlabels=xlabels, best_fit_line=best_fit_line, ten_recom=ten_recom, savetitle=p['savetitle'], **params)
 
@@ -705,6 +717,8 @@ def make_all_plots(data, ensemble_type, figsize_code, subdirectory='Plots/', dpi
 
     plt.close('all')
 
-make_all_figsizes('WeightedA', subdirectory='PaperPlots/', dpi=300)
-make_all_figsizes('Recom', subdirectory='PaperPlots/', dpi=300)
-make_all_figsizes('UniformA', subdirectory='PaperPlots/', dpi=300)
+make_all_figsizes('Recom', subdirectory='PaperPlots-v1/', dpi=300, just_one='full_page')
+make_all_figsizes('UniformA', subdirectory='PaperPlots-v1/', dpi=300, just_one='full_page')
+make_all_figsizes('WeightedA', subdirectory='PaperPlots-v1/', dpi=300, just_one='full_page')
+#make_all_figsizes('WeightedB', subdirectory='PaperPlots/', dpi=300, just_one='full_page')
+#make_all_figsizes('UniformB', subdirectory='PaperPlots/', dpi=300, just_one='full_page')

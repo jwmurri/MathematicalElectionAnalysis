@@ -90,13 +90,18 @@ def plot_graph(precincts, graph, window=None, node_size=0.1, line_size=0.05, dpi
 def calc_percentile(val, data):
     return opt.bisect(lambda x: np.percentile(data, x) - val, 0, 100)
 
-def make_box_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False, current_plan_name='Enacted plan'):
+def make_box_plot(data, title='', ylabel='', xlabel='', step=None, figsize=(6,8), dpi=400, savetitle=None, save=False, current_plan_name='Enacted plan'):
     """
     Makes a box plot of the given data, with the specified parameters.
 
     Parameters:
         data (DataFrame) dataframe with columns corresponding to the vote shares.
     """
+    if step is None:
+        step = max(1, int(len(data)/10000))
+
+    data = data[::step]
+
     # set parameters
     n = len(data)
     m = len(data.iloc[0])
@@ -106,7 +111,7 @@ def make_box_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, 
     ax.axhline(0.5, color="#cccccc")
     data.boxplot(ax=ax, positions=range(1, m+1), sym='', zorder=1)
     ax.scatter(data.iloc[0].index, data.iloc[0], color="r", marker="o", s=25/k, alpha=0.5, zorder=5, label=current_plan_name)
-    ax.legend(loc='lower right')
+    ax.legend(loc='lower right', frameon=False)
 
     ax.set_title(title)
     ax.set_xlabel(xlabel)
@@ -122,6 +127,7 @@ def make_box_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, 
                 label.set_visible(False)
 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
+    plt.show()
     plt.clf()
 
 def get_areas(shapes, norm='L1', vert=True):
@@ -179,11 +185,17 @@ def expand_polygons(shapes, expansion, offsets=None, vert=True):
 
         p.set_paths([new_path])
 
-def make_violin_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, positions=None, save=False, area_normalizer='Linf', xticks=None, current_plan_name='Enacted plan', vert=True, bw_method=0.1, alpha=0.8, dist_height=1, widths=0.2, points=200, **kwargs):
+def make_violin_plot(data, title='', ylabel='', xlabel='', step=None, figsize=(6,8), dpi=400, savetitle=None, positions=None, save=False, area_normalizer='Linf', xticks=None, current_plan_name='Enacted plan', vert=True, bw_method=0.1, alpha=0.8, dist_height=1, widths=0.2, points=200, **kwargs):
     """
     Make a violin plot of the given data, with the specified parameters.
     Only pass in the columns of the dataframe which contain the vote shares.
     """
+    if step is None:
+        step = max(1, int(len(data)/10000))
+
+    data = data[::step]
+
+
     d = data.T
     m = len(d)
 
@@ -201,7 +213,7 @@ def make_violin_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=40
         pc.set_alpha(alpha)
 
     if vert:
-        ax.axhline(0.5, color="#cccccc")
+        ax.axhline(0.5, color="#cccccc", zorder=0)
         ax.hlines(y=d.iloc[:, 0], xmin = np.arange(m)+1-0.2, xmax=np.arange(m)+1+0.2, color='r', lw=2, label=current_plan_name)
         for i in range(m):
             plt.text(i+1+0.2, d.iloc[i, 0], str(int(np.round(calc_percentile(d.iloc[i, 0], d.iloc[i]),0)))+'%', horizontalalignment='left', verticalalignment='center')
@@ -218,7 +230,7 @@ def make_violin_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=40
         ax.set_ylabel(ylabel)
 
     else:
-        ax.axvline(0.5, color="#cccccc")
+        ax.axvline(0.5, color="#cccccc", zorder=0)
         ax.vlines(x=d.iloc[:, 0], ymin = np.arange(m)+1-0.2, ymax=np.arange(m)+1+0.2, color='r', lw=2, label=current_plan_name)
         for i in range(m):
             plt.text(d.iloc[i, 0]+0.007, i+1+0.2, str(int(np.round(calc_percentile(d.iloc[i, 0], d.iloc[i]),0)))+'%', horizontalalignment='center', verticalalignment='bottom')
@@ -236,7 +248,7 @@ def make_violin_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=40
 
 
     ax.set_title(title)
-    ax.legend(loc='lower right')
+    ax.legend(loc='best', frameon=False)
 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
     plt.show()
@@ -247,42 +259,56 @@ def make_histogram(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400,
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
 
     data.hist(bins=bins)
-    ax.axvline(x=data.iloc[0], color='r', lw=2, label='Enacted plan, '+str(np.round(calc_percentile(data[0], data),1))+'%')
+    ax.axvline(x=data.iloc[0], ymax=0.2, color='r', lw=2, label='Enacted plan, '+str(np.round(calc_percentile(data.iloc[0], data),1))+'%')
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.legend(loc='upper right')
+    ax.legend(loc='best', frameon=False)
+    ax.grid(False)
 
     plt.show()
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
     plt.clf()
 
-def make_bar_chart(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False):
+def make_bar_chart(data, title='', ylabel='', xlabel='', width=0.5, histogram_like=False, figsize=(6,8), dpi=400, savetitle=None, save=False):
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
 
     unique_vals = np.unique(data)
-    ax.bar(unique_vals, [np.count_nonzero(unique_vals[i] == data) for i in range(len(unique_vals))], width=np.min(unique_vals[1:]-unique_vals[:-1])/2)
-    ax.set_xticks(unique_vals)
+    width = width*np.min(unique_vals[1:]-unique_vals[:-1])
+    bars = ax.bar(unique_vals, [np.count_nonzero(unique_vals[i] == data) for i in range(len(unique_vals))], width=width)
 
-    ax.axvline(x=data.iloc[0], color='r', lw=2, label='Enacted plan, ' +str(np.round(calc_percentile(data[0], data),1))+'%')
+    if not histogram_like:
+        ax.set_xticks(unique_vals)
+        for bar in bars:
+            yval = bar.get_height()
+            ax.text(bar.get_x()+width/2, yval, str(np.round(100*yval/len(data), 1))+'%', horizontalalignment='center', verticalalignment='bottom', zorder=9)
+        ax.axvline(x=data.iloc[0], ymax=0.2, color='r', lw=2, label='Enacted plan')
+    else:
+        ax.axvline(x=data.iloc[0], ymax=0.2, color='r', lw=2, label='Enacted plan, '+str(np.round(calc_percentile(data.iloc[0], data),1))+'%')
+
+
 
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.legend(loc='upper right')
+    ax.legend(loc='best', frameon=False)
     plt.show()
 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
     plt.clf()
 
-def make_violin_correlation(data, key, LRVS_col, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False, area_normalizer='Linf', current_plan_name='Enacted plan', vert=True, bw_method=0.1, alpha=0.8, dist_height=1, widths=0.2, points=200, **kwargs):
+def make_violin_correlation(data, key, LRVS_col, step=None, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False, area_normalizer='Linf', current_plan_name='Enacted plan', vert=True, bw_method=0.1, alpha=0.8, dist_height=1, widths=0.2, points=200, **kwargs):
     """
     Parameters:
         data (DataFrame)
         key (str)
         LRVS_col (str)
     """
+    if step is None:
+        step = max(1, int(len(data)/10000))
+
+    data = data[::step]
 
     # Extract unique values
     unique_vals = np.unique(data[key])
@@ -295,7 +321,7 @@ def make_violin_correlation(data, key, LRVS_col, title='', ylabel='', xlabel='',
 
     # Get the amount of data in each list
     bar_heights = [len(samples) for samples in LRVS_separated]
-    width_scaling = np.min(bar_heights)/bar_heights
+    width_scaling = bar_heights/np.max(bar_heights)
 
     # Construct plot
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
@@ -313,17 +339,19 @@ def make_violin_correlation(data, key, LRVS_col, title='', ylabel='', xlabel='',
         pc.set_alpha(alpha)
 
     if vert:
-        ax.axhline(0.5, color="#cccccc")
-        ax.set_ylim(0.4, 0.6)
+        ax.axhline(0.5, color="#cccccc", zorder=0)
+        ax.set_ylim(0.4, 0.65)
         ax.set_yticks([0.4, 0.5, 0.6])
         ax.set_xlim(np.min(unique_vals)-scale/2, np.max(unique_vals)+scale/2)
         ax.set_xticks(unique_vals)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
 
+        ax.hlines(y=data[LRVS_col].iloc[0], xmin = data[key].iloc[0]-0.2*scale, xmax=data[key].iloc[0]+0.2*scale, color='r', lw=2, label='Enacted Plan')
+
     else:
-        ax.axvline(0.5, color="#cccccc")
-        ax.set_xlim(0.4, 0.6)
+        ax.axvline(0.5, color="#cccccc", zorder=0)
+        ax.set_xlim(0.4, 0.65)
         ax.set_xticks([0.4, 0.5, 0.6])
         ax.set_ylim(np.min(unique_vals)-scale/2, np.max(unique_vals)+scale/2)
         ax.set_yticks(unique_vals)
@@ -331,19 +359,24 @@ def make_violin_correlation(data, key, LRVS_col, title='', ylabel='', xlabel='',
         ax.set_xlabel(ylabel)
 
     ax.set_title(title)
-    ax.legend(loc='lower right')
+    ax.legend(loc='best', frameon=False)
 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
     plt.show()
     plt.clf()
 
-def make_violin_correlation_3plots(data, key, LRVS_col, title='', ylabel='', common_xlabel='', xlabels='', figsize=(6,8), dpi=400, savetitle=None, save=False, area_normalizer='Linf', current_plan_name='Enacted plan', vert=True, bw_method=0.1, alpha=0.8, dist_height=1, widths=0.2, points=200, **kwargs):
+def make_violin_correlation_3plots(data, key, LRVS_col, title='', ylabel='', common_xlabel='', xlabels='', step=None, figsize=(6,8), dpi=400, savetitle=None, save=False, area_normalizer='Linf', current_plan_name='Enacted plan', vert=True, bw_method=0.1, alpha=0.8, dist_height=1, widths=0.2, points=200, **kwargs):
     """
     Parameters:
         data (DataFrame)
         key (list) list of 3 strings
         LRVS_col (list) list of 3 strings
     """
+    if step is None:
+        step = max(1, int(len(data)/10000))
+
+    data = data[::step]
+
     # Construct plot
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize, dpi=dpi, sharey=True)
 
@@ -360,7 +393,7 @@ def make_violin_correlation_3plots(data, key, LRVS_col, title='', ylabel='', com
 
         # Get the amount of data in each list
         bar_heights = [len(samples) for samples in LRVS_separated]
-        width_scaling = np.min(bar_heights)/bar_heights
+        width_scaling = bar_heights/np.max(bar_heights)
 
         result = ax.violinplot(LRVS_separated, positions=unique_vals, bw_method=bw_method, widths=widths, points=points, vert=vert, **kwargs)
 
@@ -375,14 +408,16 @@ def make_violin_correlation_3plots(data, key, LRVS_col, title='', ylabel='', com
         for pc in result['bodies']:
             pc.set_alpha(alpha)
 
-        ax.axhline(0.5, color="#cccccc")
+        ax.hlines(y=data[LRVS_col[i]].iloc[0], xmin = data[key[i]].iloc[0]-0.2*scale, xmax=data[key[i]].iloc[0]+0.2*scale, color='r', lw=2, label='Enacted Plan')
+
+        ax.axhline(0.5, color="#cccccc", zorder=0)
         ax.set_xlim(np.min(unique_vals)-scale/2, np.max(unique_vals)+scale/2)
         ax.set_xticks(unique_vals)
+        ax.set_ylim(0.4, 0.65)
+        ax.set_yticks([0.4, 0.45, 0.5, 0.55, 0.6])
         ax.set_xlabel(xlabels[i])
 
-        ax.set_ylim(0.4, 0.6)
-        ax.set_yticks([0.4, 0.45, 0.5, 0.55, 0.6])
-        ax.legend(loc='lower right')
+        ax.legend(loc='best', frameon=False)
 
     fig.suptitle(title, x=0.5, y=1)
     fig.text(0.5, 0, common_xlabel, ha='center', va='bottom')
@@ -405,35 +440,39 @@ def make_scatter_correlation(data, key, LRVS_col, best_fit_line=True, ten_recom=
     y = data[LRVS_col].values[::step]
     x = data[key].values[::step]
 
-    if best_fit_line: ax.axvline(0.0, c="#cccccc", lw=2)
-    ax.axhline(0.5, color="#cccccc", lw=2)
+    if best_fit_line: ax.axvline(0.0, c="#cccccc", lw=1, zorder=1)
+    ax.axhline(0.5, color="#cccccc", lw=1, zorder=1)
 
     if ten_recom:
         m = int(len(x)/10)
         for j in range(10):
             x1 = x[j*m:(j+1)*m].copy()
             y1 = y[j*m:(j+1)*m].copy()
-            plt.scatter(x1, y1, s=1, alpha=alpha)
+            plt.scatter(x1, y1, s=1, alpha=alpha, zorder=5)
     else:
-        plt.scatter(x, y, s=1, alpha=alpha)
+        plt.scatter(x, y, s=1, alpha=alpha, zorder=5)
 
-    plt.scatter(x[0], y[0], s=10, c='red', marker='*', label='Enacted Plan')
+    plt.scatter(x[0], y[0], s=10, c='red', marker='*', label='Enacted Plan', zorder=10)
 
     if best_fit_line:
 
-        # Draw a line of best fit
-        SStot = np.sum(np.square(y-np.mean(y)))
-        p, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
-        m, c = p[0], p[1]
-        SSres = np.sum(residuals)
-        R2 = 1-SSres/SStot
-        domain = np.linspace(np.min(x), np.max(x), 200)
-        plt.plot(domain, m*domain+c, label=r'Linear Best Fit, $R^2={}$'.format(np.round(R2, 2)), c='black', lw=1)
+        try:
+
+            # Draw a line of best fit
+            SStot = np.sum(np.square(y-np.mean(y)))
+            p, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
+            m, c = p[0], p[1]
+            SSres = np.sum(residuals)
+            R2 = 1-SSres/SStot
+            domain = np.linspace(np.min(x), np.max(x), 200)
+            plt.plot(domain, m*domain+c, label=r'Linear Best Fit, $R^2={}$'.format(np.round(R2, 2)), c='black', lw=1, zorder=6)
+        except LinAlgError:
+            print('SVD did not converge in Linear Least Squares')
 
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.legend(loc='upper right')
+    ax.legend(loc='best', frameon=False)
     plt.show()
 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
@@ -455,36 +494,40 @@ def make_scatter_correlation_3plots(data, key, LRVS_col, best_fit_line=True, ten
         y = data[LRVS_col[i]].values[::step]
         x = data[key[i]].values[::step]
 
-        if best_fit_line: ax.axvline(0.0, c="#cccccc", lw=1)
-        ax.axhline(0.5, color="#cccccc", lw=1)
+        if best_fit_line: ax.axvline(0.0, c="#cccccc", lw=1, zorder=0)
+        ax.axhline(0.5, color="#cccccc", lw=1, zorder=0)
 
         if ten_recom:
             m = int(len(x)/10)
             for j in range(10):
                 x1 = x[j*m:(j+1)*m].copy()
                 y1 = y[j*m:(j+1)*m].copy()
-                ax.scatter(x1, y1, s=1, alpha=alpha)
+                ax.scatter(x1, y1, s=1, alpha=alpha, zorder=5)
         else:
-            ax.scatter(x, y, s=1, alpha=alpha)
+            ax.scatter(x, y, s=1, alpha=alpha, zorder=5)
 
-        ax.scatter(x[0], y[0], s=10, c='red', marker='*', label='Enacted Plan')
+        ax.scatter(x[0], y[0], s=10, c='red', marker='*', label='Enacted Plan', zorder=10)
 
         if best_fit_line:
 
-            # Draw a line of best fit
-            SStot = np.sum(np.square(y-np.mean(y)))
-            p, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
-            m, c = p[0], p[1]
-            SSres = np.sum(residuals)
-            R2 = 1-SSres/SStot
-            domain = np.linspace(np.min(x), np.max(x), 200)
-            ax.plot(domain, m*domain+c, label= r'$R^2={}$'.format(np.round(R2, 2)), c='black', lw=1)
+            try:
+
+                # Draw a line of best fit
+                SStot = np.sum(np.square(y-np.mean(y)))
+                p, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
+                m, c = p[0], p[1]
+                SSres = np.sum(residuals)
+                R2 = 1-SSres/SStot
+                domain = np.linspace(np.min(x), np.max(x), 200)
+                ax.plot(domain, m*domain+c, label=r'$R^2={}$'.format(np.round(R2, 2)), c='black', lw=1, zorder=6)
+            except LinAlgError:
+                print('SVD did not converge in Linear Least Squares')
 
         ax.set_xlabel(xlabels[i])
 
-        ax.set_ylim(0.4, 0.6)
-        ax.set_yticks([0.4, 0.45, 0.5, 0.55, 0.6])
-        ax.legend(loc='best')
+        ax.set_ylim(0.4, 0.65)
+        ax.set_yticks([0.4, 0.45, 0.5, 0.55, 0.6, 0.65])
+        ax.legend(loc='best', frameon=False)
 
     fig.suptitle(title, x=0.5, y=1)
     fig.text(0.5, 0, common_xlabel, ha='center', va='bottom')
@@ -494,7 +537,7 @@ def make_scatter_correlation_3plots(data, key, LRVS_col, best_fit_line=True, ten
     plt.show()
 
 
-def make_10step_histogram(data, LRVS_col, bins=200, discard=0.1, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False):
+def make_10step_histogram(data, LRVS_col, bins=50, discard=0.1, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False):
 
     n = len(data)
     m = int(n/10)
@@ -509,15 +552,15 @@ def make_10step_histogram(data, LRVS_col, bins=200, discard=0.1, title='', ylabe
         else:
             label = 'Original'
         x1 = pd.Series(x[i*m:(i+1)*m].copy())
-        x1[int(discard*m):].hist(ax = ax, bins = bins, alpha = .1, color='C'+str(i))
+        x1[int(discard*m):].hist(ax = ax, bins = bins, alpha = .5, color='C'+str(i))
         x1[int(discard*m):].hist(ax = ax, histtype='step', bins = bins, lw=1, facecolor='None', color='C'+str(i), label=label)
-        ax.axvline(x1[0], lw=2, color='C'+str(i))
+        ax.axvline(x1[0], ymax=0.2, lw=2, color='C'+str(i))
 
     ax.axvline(0.5, color="#cccccc")
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.legend(loc='upper right')
+    ax.legend(loc='best', frameon=False)
     plt.show()
 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
@@ -828,7 +871,7 @@ def make_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dpi=400, file_
         ax.set_title(metricplots[key]['title'])
         ax.set_xlabel(metricplots[key]['xlabel'])
         ax.set_ylabel(metricplots[key]['ylabel'])
-        ax.legend(loc='upper right')
+        ax.legend(loc='best', frameon=False)
         plt.savefig(metricplots[key]['savetitle'], dpi=dpi, bbox_inches='tight')
         plt.clf()
 
@@ -913,7 +956,7 @@ def make_correlation_plots(idnum, kind, comment='', step=None, subdirectory='Plo
             ax.set_title(correlationplot_xaxis[key1]['name']+' and R Vote Share in Least R District in a {}-Plan Ensemble'.format(n)+correlationplot_yaxis[key]['title'])
             ax.set_xlabel(correlationplot_xaxis[key1]['name'])
             ax.set_ylabel('R Vote Share in Least R District')
-            plt.legend(loc='upper right')
+            plt.legend(loc='best', frameon=False)
             plt.savefig(subdirectory+correlationplot_xaxis[key1]['savetitle']+key+'Correlation'+common_file_ending, dpi=dpi, bbox_inches='tight')
             plt.clf()
 
@@ -1007,7 +1050,7 @@ def create_overlapping_histogram(idnum, kind, discard=0.1, comment='', subdirect
         ax.set_title('R Vote Share in Least R District in a {}-Plan Ensemble'.format(n)+hist_vals[key]['title'])
         ax.set_ylabel('Number of Plans in Ensemble')
         ax.set_xlabel('R Vote Share in Least R District'+hist_vals[key]['title'])
-        plt.legend(loc='upper right')
+        plt.legend(loc='best', frameon=False)
         plt.savefig(subdirectory+key+'Hist'+common_file_ending, dpi=dpi, bbox_inches='tight')
         plt.clf()
 
