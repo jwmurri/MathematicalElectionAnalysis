@@ -266,8 +266,8 @@ def make_histogram(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400,
     ax.legend(loc='best', frameon=False)
     ax.grid(False)
 
-    plt.show()
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
+    plt.show()
     plt.clf()
 
 def make_bar_chart(data, title='', ylabel='', xlabel='', width=0.5, histogram_like=False, figsize=(6,8), dpi=400, savetitle=None, save=False):
@@ -293,9 +293,9 @@ def make_bar_chart(data, title='', ylabel='', xlabel='', width=0.5, histogram_li
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.legend(loc='best', frameon=False)
-    plt.show()
 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
+    plt.show()
     plt.clf()
 
 def make_violin_correlation(data, key, LRVS_col, step=None, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False, area_normalizer='Linf', current_plan_name='Enacted plan', vert=True, bw_method=0.1, alpha=0.8, dist_height=1, widths=0.2, points=200, **kwargs):
@@ -473,9 +473,9 @@ def make_scatter_correlation(data, key, LRVS_col, best_fit_line=True, ten_recom=
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.legend(loc='best', frameon=False)
-    plt.show()
 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
+    plt.show()
     plt.clf()
 
 def make_scatter_correlation_3plots(data, key, LRVS_col, best_fit_line=True, ten_recom=False, step=None, title='', ylabel='', common_xlabel='', xlabels='', figsize=(8,6), dpi=400, alpha=0.4, savetitle=None, save=False):
@@ -534,7 +534,9 @@ def make_scatter_correlation_3plots(data, key, LRVS_col, best_fit_line=True, ten
     fig.text(0, 0.5, ylabel, ha='left', va='center', rotation='vertical')
     fig.tight_layout()
 
+    if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
     plt.show()
+    plt.clf()
 
 
 def make_10step_histogram(data, LRVS_col, bins=50, discard=0.1, title='', ylabel='', xlabel='', figsize=(6,8), dpi=400, savetitle=None, save=False):
@@ -561,9 +563,9 @@ def make_10step_histogram(data, LRVS_col, bins=50, discard=0.1, title='', ylabel
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.legend(loc='best', frameon=False)
-    plt.show()
 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
+    plt.show()
     plt.clf()
 
 # Analyzing the rejection rate of a chain
